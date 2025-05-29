@@ -55,6 +55,8 @@ def option():
     parser.add_argument('--D_weight',  type=float, default=0.5)
     parser.add_argument('--E_weight',  type=float, default=50.0)
     parser.add_argument('--P_weight',  type=float, default=1e-2)
+    parser.add_argument('--C_weight',  type=float, default=1e-1)
+
     
     # use random gamma function (enhancement curve) to improve generalization
     parser.add_argument('--gamma', type=bool, default=False)
