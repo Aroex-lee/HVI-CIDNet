@@ -164,3 +164,7 @@ output
 weights
 flagged
 output_hf
+datasets
+results_RGB_HVI
+weights_RGB_HVI
+output.train_RGB_HVI

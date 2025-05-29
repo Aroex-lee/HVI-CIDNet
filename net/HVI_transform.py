@@ -120,3 +120,41 @@ class RGB_HVI(nn.Module):
         if self.gated2:
             rgb = rgb * self.alpha
         return rgb
+
+    def HVI_RGB_T(self, img):
+        eps = 1e-8
+        device = img.device
+        dtypes = img.dtype
+        hue = torch.Tensor(img.shape[0], img.shape[2], img.shape[3]).to(device).to(dtypes)
+        value = img.max(1)[0].to(dtypes)
+        img_min = img.min(1)[0].to(dtypes)
+        hue[img[:,2]==value] = 4.0 + ( (img[:,0]-img[:,1]) / (value - img_min + eps)) [img[:,2]==value]
+        hue[img[:,1]==value] = 2.0 + ( (img[:,2]-img[:,0]) / (value - img_min + eps)) [img[:,1]==value]
+        hue[img[:,0]==value] = (0.0 + ((img[:,1]-img[:,2]) / (value - img_min + eps)) [img[:,0]==value]) % 6
+
+        hue[img.min(1)[0]==value] = 0.0
+        hue = hue/6.0
+
+        saturation = (value - img_min ) / (value + eps )
+        saturation[value==0] = 0
+
+        hue = hue.unsqueeze(1)
+        saturation = saturation.unsqueeze(1)
+        value = value.unsqueeze(1)
+        
+        k = self.density_k
+        self.this_k = k.item()
+        
+        color_sensitive = ((value * 0.5 * pi).sin() + eps).pow(k)
+        ch = (2.0 * pi * hue).cos()
+        cv = (2.0 * pi * hue).sin()
+        H = color_sensitive * saturation * ch
+        V = color_sensitive * saturation * cv
+        I = value
+
+        R = img[:, 0:1]
+        G = img[:, 1:2]
+        B = img[:, 2:3]
+
+        xyz = torch.cat([H, V, I, R, G, B],dim=1)
+        return xyz

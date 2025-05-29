@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import numpy as np
 from torch.utils.data import DataLoader
-from net.CIDNet import CIDNet
+from net.CIDNet import CIDNet, CIDNet_with_RGB
 from data.options import option
 from measure import metrics
 from eval import eval
@@ -82,10 +82,12 @@ def train(epoch):
             pic_last_10 = 0
             output_img = transforms.ToPILImage()((output_rgb)[0].squeeze(0))
             gt_img = transforms.ToPILImage()((gt_rgb)[0].squeeze(0))
+            origin_img = transforms.ToPILImage()((im1)[0].squeeze(0))
             if not os.path.exists(opt.val_folder+'training'):          
                 os.mkdir(opt.val_folder+'training') 
             output_img.save(opt.val_folder+'training/test.png')
             gt_img.save(opt.val_folder+'training/gt.png')
+            origin_img.save(opt.val_folder+'training/dark.png')
     return loss_print, pic_cnt
                 
 
@@ -149,7 +151,7 @@ def load_datasets():
 
 def build_model():
     print('===> Building model ')
-    model = CIDNet().cuda()
+    model = CIDNet_with_RGB().cuda()
     if opt.start_epoch > 0:
         pth = f"./weights/train/epoch_{opt.start_epoch}.pth"
         model.load_state_dict(torch.load(pth, map_location=lambda storage, loc: storage))
