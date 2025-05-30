@@ -262,8 +262,8 @@ if __name__ == '__main__':
                 label_dir = opt.data_valgt_SICE_grad
                 norm_size = False
 
-            im_dir = opt.val_folder + output_folder + epoch.str() + '/' + '*.png'
-            eval(model, testing_data_loader, model_out_path, opt.val_folder+output_folder+epoch.str()+'/', 
+            im_dir = opt.val_folder + output_folder + str(epoch) + '/' + '*.png'
+            eval(model, testing_data_loader, model_out_path, opt.val_folder+output_folder+str(epoch)+'/', 
                  norm_size=norm_size, LOL=opt.lol_v1, v2=opt.lolv2_real, alpha=0.8)
             
             avg_psnr, avg_ssim, avg_lpips = metrics(im_dir, label_dir, use_GT_mean=False)
