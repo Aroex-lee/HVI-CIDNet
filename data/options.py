@@ -12,6 +12,7 @@ def option():
     parser.add_argument('--gpu_mode', type=bool, default=True)
     parser.add_argument('--shuffle', type=bool, default=True)
     parser.add_argument('--threads', type=int, default=16, help='number of threads for dataloader to use')
+    parser.add_argument('--model', type=str, default='origin', help="select model from 'origin' 'modify_M_R' 'modify_M' 'modify_R'")
 
     # choose a scheduler
     parser.add_argument('--cos_restart_cyclic', type=bool, default=False)
@@ -55,6 +56,7 @@ def option():
     parser.add_argument('--D_weight',  type=float, default=0.5)
     parser.add_argument('--E_weight',  type=float, default=50.0)
     parser.add_argument('--P_weight',  type=float, default=1e-2)
+    parser.add_argument('--C_weight',  type=float, default=0.1)
     
     # use random gamma function (enhancement curve) to improve generalization
     parser.add_argument('--gamma', type=bool, default=False)

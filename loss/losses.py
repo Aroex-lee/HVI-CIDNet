@@ -190,4 +190,50 @@ class SSIM(torch.nn.Module):
         return (1. - map_ssim(img1, img2, window, self.window_size, channel, self.size_average)) * self.weight
 
 
+class LocalColorConsistencyLoss(nn.Module):
+    """
+    Local (patch-wise) color consistency loss.
+    Args:
+        patch_size (int): The height and width of each patch.
+        loss_weight (float): Loss weight. Default: 1.0.
+    """
+    def __init__(self, patch_size=32, loss_weight=1.0):
+        super(LocalColorConsistencyLoss, self).__init__()
+        self.patch_size = patch_size
+        self.loss_weight = loss_weight
+
+    def forward(self, pred, target):
+        """
+        Args:
+            pred (Tensor): Predicted image of shape (N, 3, H, W)
+            target (Tensor): Ground-truth image of shape (N, 3, H, W)
+        Returns:
+            Tensor: Scalar loss value.
+        """
+        assert pred.shape[1] == 3 and target.shape[1] == 3, "Images must have 3 channels"
+
+        N, C, H, W = pred.shape
+        ph, pw = self.patch_size, self.patch_size
+
+        # Make sure H and W are divisible by patch size
+        H_crop = (H // ph) * ph
+        W_crop = (W // pw) * pw
+        pred = pred[:, :, :H_crop, :W_crop]
+        target = target[:, :, :H_crop, :W_crop]
+
+        # Unfold to extract patches: (N, C*ph*pw, num_patches)
+        pred_patches = F.unfold(pred, kernel_size=(ph, pw), stride=(ph, pw))  # shape: (N, C*ph*pw, P)
+        target_patches = F.unfold(target, kernel_size=(ph, pw), stride=(ph, pw))
+
+        # Reshape to (N, P, C, ph*pw)
+        P = pred_patches.shape[-1]
+        pred_patches = pred_patches.view(N, C, ph * pw, P).permute(0, 3, 1, 2)  # (N, P, C, patch_area)
+        target_patches = target_patches.view(N, C, ph * pw, P).permute(0, 3, 1, 2)
+
+        # Compute per-patch mean color: shape (N, P, C)
+        pred_mean = pred_patches.mean(dim=-1)
+        target_mean = target_patches.mean(dim=-1)
+
+        loss = F.mse_loss(pred_mean, target_mean, reduction='mean')
+        return loss * self.loss_weight
 

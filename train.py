@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import numpy as np
 from torch.utils.data import DataLoader
-from net.CIDNet import CIDNet
+from net.CIDNet import CIDNet, CIDNet_with_Mamba, CIDNet_with_RESRGB, CIDNet_with_Mamba_and_RESRGB
 from data.options import option
 from measure import metrics
 from eval import eval
@@ -17,6 +17,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 opt = option().parse_args()
+print(vars(opt))
 
 def seed_torch():
     seed = random.randint(1, 1000000)
@@ -59,8 +60,12 @@ def train(epoch):
         gt_rgb = im2
         output_hvi = model.HVIT(output_rgb)
         gt_hvi = model.HVIT(gt_rgb)
-        loss_hvi = L1_loss(output_hvi, gt_hvi) + D_loss(output_hvi, gt_hvi) + E_loss(output_hvi, gt_hvi) + opt.P_weight * P_loss(output_hvi, gt_hvi)[0]
-        loss_rgb = L1_loss(output_rgb, gt_rgb) + D_loss(output_rgb, gt_rgb) + E_loss(output_rgb, gt_rgb) + opt.P_weight * P_loss(output_rgb, gt_rgb)[0]
+        if opt.C_weight != 0:
+            loss_hvi = L1_loss(output_hvi, gt_hvi) + D_loss(output_hvi, gt_hvi) + E_loss(output_hvi, gt_hvi) + opt.P_weight * P_loss(output_hvi, gt_hvi)[0] + opt.C_weight * C_loss(output_hvi, gt_hvi)
+            loss_rgb = L1_loss(output_rgb, gt_rgb) + D_loss(output_rgb, gt_rgb) + E_loss(output_rgb, gt_rgb) + opt.P_weight * P_loss(output_rgb, gt_rgb)[0] + opt.C_weight * C_loss(output_rgb, gt_rgb)
+        else:
+            loss_hvi = L1_loss(output_hvi, gt_hvi) + D_loss(output_hvi, gt_hvi) + E_loss(output_hvi, gt_hvi) + opt.P_weight * P_loss(output_hvi, gt_hvi)[0]
+            loss_rgb = L1_loss(output_rgb, gt_rgb) + D_loss(output_rgb, gt_rgb) + E_loss(output_rgb, gt_rgb) + opt.P_weight * P_loss(output_rgb, gt_rgb)[0]
         loss = loss_rgb + opt.HVI_weight * loss_hvi
         iter += 1
         
@@ -82,10 +87,12 @@ def train(epoch):
             pic_last_10 = 0
             output_img = transforms.ToPILImage()((output_rgb)[0].squeeze(0))
             gt_img = transforms.ToPILImage()((gt_rgb)[0].squeeze(0))
+            origin_img = transforms.ToPILImage()((im1)[0].squeeze(0))
             if not os.path.exists(opt.val_folder+'training'):          
                 os.mkdir(opt.val_folder+'training') 
             output_img.save(opt.val_folder+'training/test.png')
             gt_img.save(opt.val_folder+'training/gt.png')
+            origin_img.save(opt.val_folder+'training/dark.png')
     return loss_print, pic_cnt
                 
 
@@ -149,7 +156,15 @@ def load_datasets():
 
 def build_model():
     print('===> Building model ')
-    model = CIDNet().cuda()
+    if opt.model == 'origin':
+        model = CIDNet().cuda()
+    elif opt.model == 'modify_M_R':
+        model = CIDNet_with_Mamba_and_RESRGB().cuda()
+    elif opt.model == 'modify_M':
+        model = CIDNet_with_Mamba().cuda()
+    elif opt.model == 'modify_R':
+        model = CIDNet_with_RESRGB().cuda()
+
     if opt.start_epoch > 0:
         pth = f"./weights/train/epoch_{opt.start_epoch}.pth"
         model.load_state_dict(torch.load(pth, map_location=lambda storage, loc: storage))
@@ -178,12 +193,14 @@ def init_loss():
     D_weight    = opt.D_weight 
     E_weight    = opt.E_weight 
     P_weight    = 1.0
+    C_weight    = 1.0
     
     L1_loss= L1Loss(loss_weight=L1_weight, reduction='mean').cuda()
     D_loss = SSIM(weight=D_weight).cuda()
     E_loss = EdgeLoss(loss_weight=E_weight).cuda()
     P_loss = PerceptualLoss({'conv1_2': 1, 'conv2_2': 1,'conv3_4': 1,'conv4_4': 1}, perceptual_weight = P_weight ,criterion='mse').cuda()
-    return L1_loss,P_loss,E_loss,D_loss
+    C_loss = LocalColorConsistencyLoss(loss_weight=C_weight)
+    return L1_loss,P_loss,E_loss,D_loss,C_loss
 
 if __name__ == '__main__':  
     
@@ -194,7 +211,7 @@ if __name__ == '__main__':
     training_data_loader, testing_data_loader = load_datasets()
     model = build_model()
     optimizer,scheduler = make_scheduler()
-    L1_loss,P_loss,E_loss,D_loss = init_loss()
+    L1_loss,P_loss,E_loss,D_loss,C_loss = init_loss()
     
     '''
     train
@@ -245,8 +262,8 @@ if __name__ == '__main__':
                 label_dir = opt.data_valgt_SICE_grad
                 norm_size = False
 
-            im_dir = opt.val_folder + output_folder + '*.png'
-            eval(model, testing_data_loader, model_out_path, opt.val_folder+output_folder, 
+            im_dir = opt.val_folder + output_folder + epoch.str() + '/' + '*.png'
+            eval(model, testing_data_loader, model_out_path, opt.val_folder+output_folder+epoch.str()+'/', 
                  norm_size=norm_size, LOL=opt.lol_v1, v2=opt.lolv2_real, alpha=0.8)
             
             avg_psnr, avg_ssim, avg_lpips = metrics(im_dir, label_dir, use_GT_mean=False)
